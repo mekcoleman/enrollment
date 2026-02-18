@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Illinois School Enrollment Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ===== RESET & ISOLATION ===== */
+  #il-enrollment-widget *,
+  #il-enrollment-widget *::before,
+  #il-enrollment-widget *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ===== WIDGET CONTAINER ===== */
+  #il-enrollment-widget {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    background: #f5f3ef;
+    color: #1a1a1a;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto;
+    border: 1px solid #ddd;
+    overflow: hidden;
+  }
+
+  /* ===== HEADER ===== */
+  #il-enrollment-widget .ew-header {
+    background: #162b75;
+    color: #fff;
+    padding: 20px 24px 18px;
+  }
+  #il-enrollment-widget .ew-header h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-header p {
+    font-size: 0.82rem;
+    opacity: 0.85;
+    margin-top: 4px;
+    font-family: Georgia, serif;
+  }
+
+  /* ===== CONTROLS ===== */
+  #il-enrollment-widget .ew-controls {
+    background: #162b75;
+    padding: 0 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #il-enrollment-widget .ew-tab-row {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+  #il-enrollment-widget .ew-tab {
+    background: transparent;
+    color: rgba(255,255,255,0.65);
+    border: none;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: Georgia, serif;
+    border-bottom: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  #il-enrollment-widget .ew-tab:hover { color: #fff; }
+  #il-enrollment-widget .ew-tab.active {
+    color: #fff;
+    border-bottom-color: #fff;
+    font-weight: bold;
+  }
+
+  #il-enrollment-widget .ew-search-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  #il-enrollment-widget .ew-search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+  #il-enrollment-widget .ew-input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.88rem;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-family: Georgia, serif;
+    outline: none;
+  }
+  #il-enrollment-widget .ew-input::placeholder { color: rgba(255,255,255,0.5); }
+  #il-enrollment-widget .ew-input:focus { border-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.18); }
+
+  #il-enrollment-widget .ew-autocomplete {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    display: none;
+  }
+  #il-enrollment-widget .ew-autocomplete.open { display: block; }
+  #il-enrollment-widget .ew-ac-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.84rem;
+    color: #1a1a1a;
+    border-bottom: 1px solid #f0f0f0;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-ac-item:hover,
+  #il-enrollment-widget .ew-ac-item.highlighted { background: #e8edf8; }
+  #il-enrollment-widget .ew-ac-item .ac-sub {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 2px;
+  }
+
+  #il-enrollment-widget .ew-btn {
+    background: #fff;
+    color: #162b75;
+    border: none;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: Georgia, serif;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  #il-enrollment-widget .ew-btn:hover { background: #e0e6f5; }
+  #il-enrollment-widget .ew-btn.ew-btn-blue {
+    background: #162b75;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+  #il-enrollment-widget .ew-btn.ew-btn-blue:hover { background: #1e3d9e; }
+
+  /* Group by panel */
+  #il-enrollment-widget .ew-group-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  #il-enrollment-widget .ew-group-label {
+    color: rgba(255,255,255,0.75);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-group-chip {
+    background: rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 3px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    font-family: Georgia, serif;
+    transition: all 0.12s;
+  }
+  #il-enrollment-widget .ew-group-chip:hover { background: rgba(255,255,255,0.25); color: #fff; }
+  #il-enrollment-widget .ew-group-chip.active { background: #fff; color: #162b75; font-weight: bold; border-color: #fff; }
+
+  /* ===== SELECTIONS ===== */
+  #il-enrollment-widget .ew-selections {
+    padding: 10px 24px;
+    background: #edeae4;
+    border-bottom: 1px solid #d4cfc6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-height: 0;
+  }
+  #il-enrollment-widget .ew-selections:empty { display: none; }
+  #il-enrollment-widget .ew-sel-label {
+    font-size: 0.75rem;
+    color: #666;
+    font-style: italic;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #162b75;
+    color: #fff;
+    border-radius: 3px;
+    padding: 3px 8px 3px 10px;
+    font-size: 0.78rem;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-tag-x {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+  }
+  #il-enrollment-widget .ew-tag-x:hover { color: #fff; }
+
+  /* ===== CHART AREA ===== */
+  #il-enrollment-widget .ew-chart-area {
+    padding: 20px 24px 8px;
+    background: #fff;
+  }
+  #il-enrollment-widget .ew-chart-title {
+    font-size: 1rem;
+    color: #162b75;
+    font-weight: bold;
+    margin-bottom: 4px;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-chart-subtitle {
+    font-size: 0.78rem;
+    color: #666;
+    margin-bottom: 14px;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-chart-wrap {
+    position: relative;
+    width: 100%;
+  }
+  #il-enrollment-widget canvas {
+    max-width: 100%;
+  }
+
+  /* ===== TABLE ===== */
+  #il-enrollment-widget .ew-table-area {
+    padding: 0 24px 16px;
+    background: #fff;
+    overflow-x: auto;
+  }
+  #il-enrollment-widget table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget th {
+    background: #f0eee9;
+    color: #162b75;
+    font-weight: bold;
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 2px solid #162b75;
+    white-space: nowrap;
+  }
+  #il-enrollment-widget td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #e8e5e0;
+    vertical-align: top;
+  }
+  #il-enrollment-widget tr:last-child td { border-bottom: none; }
+  #il-enrollment-widget tr:hover td { background: #f7f5f1; }
+  #il-enrollment-widget td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #il-enrollment-widget .ew-trend { font-size: 0.75rem; }
+  #il-enrollment-widget .ew-trend.up { color: #1a7f3c; }
+  #il-enrollment-widget .ew-trend.down { color: #c0392b; }
+
+  /* ===== EMPTY STATE ===== */
+  #il-enrollment-widget .ew-empty {
+    text-align: center;
+    padding: 40px 24px;
+    color: #888;
+    font-family: Georgia, serif;
+    font-size: 0.9rem;
+    background: #fff;
+  }
+  #il-enrollment-widget .ew-empty-icon { font-size: 2rem; margin-bottom: 8px; }
+
+  /* ===== FOOTER ===== */
+  #il-enrollment-widget .ew-footer {
+    background: #f0eee9;
+    border-top: 1px solid #d4cfc6;
+    padding: 8px 24px;
+  }
+  #il-enrollment-widget .ew-source {
+    font-size: 0.74rem;
+    color: #777;
+    font-style: italic;
+    font-family: Georgia, serif;
+  }
+
+  /* ===== APPROX NOTE ===== */
+  #il-enrollment-widget .ew-approx-note {
+    font-size: 0.75rem;
+    color: #888;
+    font-style: italic;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e8e5e0;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-approx-marker {
+    color: #b5860a;
+    font-weight: bold;
+    font-style: normal;
+    cursor: help;
+    font-size: 0.9em;
+  }
+
+  /* ===== LOADING ===== */
+  #il-enrollment-widget .ew-loading {
+    text-align: center;
+    padding: 40px;
+    color: #162b75;
+    font-family: Georgia, serif;
+  }
+  #il-enrollment-widget .ew-spinner {
+    display: inline-block;
+    width: 28px; height: 28px;
+    border: 3px solid #ccd4ec;
+    border-top-color: #162b75;
+    border-radius: 50%;
+    animation: ew-spin 0.8s linear infinite;
+    margin-bottom: 10px;
+  }
+  @keyframes ew-spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="il-enrollment-widget">
+
+  <div class="ew-header">
+    <h1>Illinois School Enrollment Tracker</h1>
+    <p>Fall enrollment counts from 2015-16 through 2024-25 school years.</p>
+  </div>
+
+  <div class="ew-controls">
+    <!-- Mode tabs -->
+    <div class="ew-tab-row">
+      <button class="ew-tab active" data-mode="school" onclick="ewSetMode('school')">Search Schools</button>
+      <button class="ew-tab" data-mode="district" onclick="ewSetMode('district')">Search Districts</button>
+      <button class="ew-tab" data-mode="group" onclick="ewSetMode('group')">Group by Category</button>
+    </div>
+
+    <!-- School search -->
+    <div id="ew-school-panel" class="ew-search-row">
+      <div class="ew-search-wrap">
+        <input class="ew-input" id="ew-school-input" type="text" placeholder="Search school name…" autocomplete="off"
+          oninput="ewAcInput(this, 'school')" onkeydown="ewAcKey(event,'school')" onfocus="ewAcFocus('school')">
+        <div class="ew-autocomplete" id="ew-school-ac"></div>
+      </div>
+      <span style="color:rgba(255,255,255,0.5);font-size:0.8rem;font-style:italic;">Include district to distinguish same-name schools</span>
+    </div>
+
+    <!-- District search -->
+    <div id="ew-district-panel" class="ew-search-row" style="display:none">
+      <div class="ew-search-wrap">
+        <input class="ew-input" id="ew-district-input" type="text" placeholder="Search district name…" autocomplete="off"
+          oninput="ewAcInput(this, 'district')" onkeydown="ewAcKey(event,'district')" onfocus="ewAcFocus('district')">
+        <div class="ew-autocomplete" id="ew-district-ac"></div>
+      </div>
+    </div>
+
+    <!-- Group mode -->
+    <div id="ew-group-panel" class="ew-group-row" style="display:none">
+      <span class="ew-group-label">Show by:</span>
+      <button class="ew-group-chip" data-group="all" onclick="ewSetGroup('all')">All Schools (Statewide)</button>
+      <button class="ew-group-chip" data-group="4" onclick="ewSetGroup('4')">Public Schools</button>
+      <button class="ew-group-chip" data-group="3" onclick="ewSetGroup('3')">Nonpublic Schools</button>
+      <button class="ew-group-chip" data-group="7" onclick="ewSetGroup('7')">Special Ed Schools</button>
+      <button class="ew-group-chip" data-group="6" onclick="ewSetGroup('6')">Special Ed Districts/Cooperatives</button>
+      <button class="ew-group-chip" data-group="9" onclick="ewSetGroup('9')">Vocational Schools</button>
+      <button class="ew-group-chip" data-group="A" onclick="ewSetGroup('A')">Regional Programs</button>
+      <button class="ew-group-chip" data-group="E" onclick="ewSetGroup('E')">Early Childhood</button>
+    </div>
+  </div>
+
+  <!-- Selected items tags -->
+  <div class="ew-selections" id="ew-selections"></div>
+
+  <!-- Main content -->
+  <div id="ew-main">
+    <div class="ew-loading">
+      <div class="ew-spinner"></div>
+      <div>Loading enrollment data…</div>
+    </div>
+  </div>
+
+  <div class="ew-footer">
+    <div class="ew-source">Source: Illinois State Board of Education Fall Enrollment Counts</div>
+  </div>
+</div>
+
+<script>
+// ==========================================
+// STATE
+// ==========================================
+let EW = {
+  db: null,
+  mode: 'school',
+  selections: [],      // [{type:'school'|'district', idx, label, sublabel}]
+  groupCat: null,
+  acHighlight: -1,
+  acItems: [],
+  chart: null,
+};
+
+const YEARS = [2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+const YEAR_LABELS = ['2015-16','2016-17','2017-18','2018-19','2019-20','2020-21','2021-22','2022-23','2023-24','2024-25'];
+
+const COLORS = [
+  '#162b75','#e05c1a','#1a7f3c','#8b2fc9','#b5860a',
+  '#0a7a8f','#c0392b','#2c6e49','#6b4c9a','#996633',
+  '#1c5d8f','#e5480a','#2d7a4f','#a0349a'
+];
+
+// ==========================================
+// INIT - load data
+// ==========================================
+(async function() {
+  try {
+    // Try to load from same directory
+    const resp = await fetch('enrollment_data.json');
+    if (!resp.ok) throw new Error('fetch failed');
+    const raw = await resp.json();
+    buildDB(raw);
+  } catch(e) {
+    document.getElementById('ew-main').innerHTML = 
+      '<div class="ew-empty"><div class="ew-empty-icon">⚠️</div>' +
+      '<p>Could not load enrollment data file (enrollment_data.json).<br>' +
+      'Please ensure the data file is in the same folder as this HTML file.</p></div>';
+  }
+})();
+
+function buildDB(raw) {
+  // raw: {cats, catLabels, counties, districts, schools, records, yearOffset}
+  EW.db = raw;
+  // Build RCDTS-based school->district map from records for 2016-2018 
+  // (which have no district name)
+  // Also build a school name -> set of districts map for autocomplete
+  EW.schoolDistrictMap = {}; // schoolIdx -> set of districtIdxs
+  EW.districtSchoolMap = {}; // districtIdx -> set of schoolIdxs (non-zero k12)
+
+  for (const r of raw.records) {
+    const [yOff, countyI, catI, schoolI, districtI, k12] = r;
+    if (k12 <= 0) continue;
+    if (!EW.schoolDistrictMap[schoolI]) EW.schoolDistrictMap[schoolI] = new Set();
+    if (districtI !== 0 || raw.districts[0] !== '') {
+      EW.schoolDistrictMap[schoolI].add(districtI);
+    }
+    if (!EW.districtSchoolMap[districtI]) EW.districtSchoolMap[districtI] = new Set();
+    EW.districtSchoolMap[districtI].add(schoolI);
+  }
+
+  // Initial render
+  renderMain();
+}
+
+// ==========================================
+// MODE
+// ==========================================
+function ewSetMode(mode) {
+  EW.mode = mode;
+  EW.selections = [];
+  EW.groupCat = null;
+  document.querySelectorAll('#il-enrollment-widget .ew-tab').forEach(t => 
+    t.classList.toggle('active', t.dataset.mode === mode));
+  document.getElementById('ew-school-panel').style.display = mode==='school' ? '' : 'none';
+  document.getElementById('ew-district-panel').style.display = mode==='district' ? '' : 'none';
+  document.getElementById('ew-group-panel').style.display = mode==='group' ? '' : 'none';
+  document.querySelectorAll('.ew-group-chip').forEach(c => c.classList.remove('active'));
+  renderTags();
+  renderMain();
+}
+
+function ewSetGroup(cat) {
+  EW.groupCat = cat;
+  document.querySelectorAll('.ew-group-chip').forEach(c => 
+    c.classList.toggle('active', c.dataset.group === cat));
+  renderMain();
+}
+
+// ==========================================
+// AUTOCOMPLETE
+// ==========================================
+function ewAcInput(inp, type) {
+  const q = inp.value.trim().toLowerCase();
+  EW.acHighlight = -1;
+  if (q.length < 2) { closeAc(type); return; }
+
+  const db = EW.db;
+  if (!db) return;
+
+  let results = [];
+
+  if (type === 'school') {
+    for (let i = 0; i < db.schools.length; i++) {
+      if (db.schools[i].toLowerCase().includes(q)) {
+        const districts = EW.schoolDistrictMap[i] ? [...EW.schoolDistrictMap[i]] : [];
+        if (districts.length === 0) {
+          results.push({idx: i, label: db.schools[i], sublabel: ''});
+        } else {
+          for (const di of districts) {
+            const dname = db.districts[di] || '';
+            results.push({idx: i, label: db.schools[i], sublabel: dname, districtIdx: di});
+          }
+        }
+        if (results.length >= 50) break;
+      }
+    }
+  } else {
+    for (let i = 0; i < db.districts.length; i++) {
+      if (db.districts[i] && db.districts[i].toLowerCase().includes(q)) {
+        results.push({idx: i, label: db.districts[i], sublabel: ''});
+        if (results.length >= 50) break;
+      }
+    }
+  }
+
+  EW.acItems = results;
+  renderAc(type);
+}
+
+function ewAcFocus(type) {
+  const inp = document.getElementById(`ew-${type}-input`);
+  if (inp.value.trim().length >= 2) ewAcInput(inp, type);
+}
+
+function renderAc(type) {
+  const ac = document.getElementById(`ew-${type}-ac`);
+  if (EW.acItems.length === 0) { ac.classList.remove('open'); return; }
+  ac.innerHTML = EW.acItems.map((item, i) => 
+    `<div class="ew-ac-item${i===EW.acHighlight?' highlighted':''}" 
+         onmousedown="ewAcSelect(${i},'${type}')" onmouseover="ewAcHover(${i})">
+      ${escHtml(item.label)}
+      ${item.sublabel ? `<div class="ac-sub">${escHtml(item.sublabel)}</div>` : ''}
+    </div>`
+  ).join('');
+  ac.classList.add('open');
+}
+
+function ewAcKey(e, type) {
+  if (!['ArrowDown','ArrowUp','Enter','Escape'].includes(e.key)) return;
+  e.preventDefault();
+  if (e.key === 'Escape') { closeAc(type); return; }
+  if (e.key === 'ArrowDown') EW.acHighlight = Math.min(EW.acHighlight+1, EW.acItems.length-1);
+  if (e.key === 'ArrowUp') EW.acHighlight = Math.max(EW.acHighlight-1, -1);
+  if (e.key === 'Enter' && EW.acHighlight >= 0) { ewAcSelect(EW.acHighlight, type); return; }
+  renderAc(type);
+}
+
+function ewAcHover(i) { EW.acHighlight = i; }
+
+function ewAcSelect(i, type) {
+  const item = EW.acItems[i];
+  if (!item) return;
+  // Check not already added
+  const dup = EW.selections.find(s => 
+    s.type === type && s.idx === item.idx && 
+    (type !== 'school' || s.districtIdx === item.districtIdx));
+  if (!dup) {
+    EW.selections.push({
+      type, idx: item.idx, label: item.label, 
+      sublabel: item.sublabel,
+      districtIdx: item.districtIdx
+    });
+  }
+  document.getElementById(`ew-${type}-input`).value = '';
+  closeAc(type);
+  renderTags();
+  renderMain();
+}
+
+function closeAc(type) {
+  const ac = document.getElementById(`ew-${type}-ac`);
+  if (ac) { ac.classList.remove('open'); ac.innerHTML = ''; }
+  EW.acItems = [];
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#il-enrollment-widget .ew-search-wrap')) {
+    closeAc('school');
+    closeAc('district');
+  }
+});
+
+// ==========================================
+// TAGS
+// ==========================================
+function renderTags() {
+  const el = document.getElementById('ew-selections');
+  if (EW.selections.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<span class="ew-sel-label">Tracking:</span>' +
+    EW.selections.map((s, i) => 
+      `<span class="ew-tag">
+        ${escHtml(s.label)}${s.sublabel ? ' — ' + escHtml(s.sublabel) : ''}
+        <button class="ew-tag-x" onclick="ewRemove(${i})" title="Remove">✕</button>
+      </span>`
+    ).join('');
+}
+
+function ewRemove(i) {
+  EW.selections.splice(i, 1);
+  renderTags();
+  renderMain();
+}
+
+// ==========================================
+// MAIN RENDER
+// ==========================================
+function renderMain() {
+  if (!EW.db) return;
+  const main = document.getElementById('ew-main');
+
+  if (EW.mode === 'group') {
+    if (!EW.groupCat) {
+      main.innerHTML = '<div class="ew-empty"><div class="ew-empty-icon">📊</div>' +
+        '<p>Select a category above to view statewide enrollment trends.</p></div>';
+      return;
+    }
+    renderGroup(main);
+  } else {
+    if (EW.selections.length === 0) {
+      main.innerHTML = `<div class="ew-empty"><div class="ew-empty-icon">🔍</div>
+        <p>Search for a ${EW.mode} above to view enrollment over time.<br>
+        <span style="font-size:0.8rem;color:#aaa;">Note: Many schools share names — specify the district to find the right one.</span></p></div>`;
+      return;
+    }
+    if (EW.mode === 'school') renderSchools(main);
+    else renderDistricts(main);
+  }
+}
+
+// ==========================================
+// BUILD DATA SERIES
+// ==========================================
+// Returns {data: [...], approx: [bool x10]}
+// For a single school: -1 stays as -1 (displayed as "Less than 10"), no substitution needed
+function getSchoolSeries(sel) {
+  const db = EW.db;
+  const series = Array(10).fill(null);
+  const approx = Array(10).fill(false);
+  for (const r of db.records) {
+    const [yOff, countyI, catI, schoolI, districtI, k12] = r;
+    if (schoolI !== sel.idx) continue;
+    if (sel.districtIdx !== undefined && districtI !== sel.districtIdx) continue;
+    if (k12 === -1) {
+      series[yOff] = -1; // single school suppressed — show as "Less than 10"
+    } else if (k12 > 0) {
+      series[yOff] = (series[yOff] === -1 ? 0 : (series[yOff] || 0)) + k12;
+    }
+  }
+  return { data: series, approx };
+}
+
+// For districts and groups: substitute 5 for -1 when aggregating, flag year as approx
+function getDistrictSeries(sel) {
+  const db = EW.db;
+  const series = Array(10).fill(null);
+  const approx = Array(10).fill(false);
+  for (const r of db.records) {
+    const [yOff, countyI, catI, schoolI, districtI, k12] = r;
+    if (districtI !== sel.idx) continue;
+    if (k12 === -1) {
+      series[yOff] = (series[yOff] || 0) + 5; // midpoint substitution
+      approx[yOff] = true;
+    } else if (k12 > 0) {
+      series[yOff] = (series[yOff] || 0) + k12;
+    }
+  }
+  return { data: series, approx };
+}
+
+function getGroupSeries(cat) {
+  const db = EW.db;
+  const series = Array(10).fill(0);
+  const approx = Array(10).fill(false);
+  const catIdx = cat === 'all' ? -1 : db.cats.indexOf(cat);
+  for (const r of db.records) {
+    const [yOff, countyI, catI, schoolI, districtI, k12] = r;
+    if (catIdx >= 0 && catI !== catIdx) continue;
+    if (k12 === -1) {
+      series[yOff] += 5; // midpoint substitution
+      approx[yOff] = true;
+    } else if (k12 > 0) {
+      series[yOff] += k12;
+    }
+  }
+  return { data: series, approx };
+}
+
+// ==========================================
+// RENDER SCHOOLS
+// ==========================================
+function renderSchools(main) {
+  const datasets = EW.selections.map((sel, i) => {
+    const { data, approx } = getSchoolSeries(sel);
+    return {
+      label: sel.label + (sel.sublabel ? ` (${sel.sublabel})` : ''),
+      data, approx,
+      color: COLORS[i % COLORS.length],
+      sel
+    };
+  });
+  renderChartAndTable(main, datasets, 'School Enrollment Over Time', 'K-12 enrollment by school year');
+}
+
+function renderDistricts(main) {
+  const datasets = EW.selections.map((sel, i) => {
+    const { data, approx } = getDistrictSeries(sel);
+    return {
+      label: sel.label,
+      data, approx,
+      color: COLORS[i % COLORS.length],
+      sel
+    };
+  });
+  renderChartAndTable(main, datasets, 'District Enrollment Over Time', 'K-12 enrollment by school year');
+}
+
+function renderGroup(main) {
+  const db = EW.db;
+  const catLabel = EW.groupCat === 'all' ? 'All Schools' :
+    (db.catLabels[db.cats.indexOf(EW.groupCat)] || EW.groupCat);
+  const { data, approx } = getGroupSeries(EW.groupCat);
+  const datasets = [{
+    label: catLabel,
+    data, approx,
+    color: COLORS[0],
+  }];
+  renderChartAndTable(main, datasets, `${catLabel} — Statewide Enrollment`, 'K-12 enrollment by school year');
+}
+
+// ==========================================
+// CHART + TABLE
+// ==========================================
+function renderChartAndTable(main, datasets, title, subtitle) {
+  // Compute per-year approx flag (true if ANY dataset has approx for that year)
+  const yearApprox = Array(10).fill(false);
+  datasets.forEach(ds => {
+    if (ds.approx) ds.approx.forEach((a, i) => { if (a) yearApprox[i] = true; });
+  });
+  const anyApprox = yearApprox.some(a => a);
+
+  main.innerHTML = `
+    <div class="ew-chart-area">
+      <div class="ew-chart-title">${escHtml(title)}</div>
+      <div class="ew-chart-subtitle">${escHtml(subtitle)}</div>
+      <div class="ew-chart-wrap"><canvas id="ew-chart" height="300"></canvas></div>
+      ${anyApprox ? '<div class="ew-approx-note">~ Totals for years marked approximate include an estimated value of 5 for each school reporting fewer than 10 students, per ISBE privacy suppression rules.</div>' : ''}
+    </div>
+    <div class="ew-table-area">
+      <div id="ew-table-inner"></div>
+    </div>`;
+
+  // Destroy old chart
+  if (EW.chart) { EW.chart.destroy(); EW.chart = null; }
+
+  // Build chart — for approx years, use the value as-is (5 substituted already)
+  // but label the x-axis tick with ~ if that year is approximate
+  const xLabels = YEAR_LABELS.map((lbl, i) => yearApprox[i] ? '~' + lbl : lbl);
+
+  const ctx = document.getElementById('ew-chart').getContext('2d');
+  EW.chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: xLabels,
+      datasets: datasets.map(ds => ({
+        label: ds.label,
+        data: ds.data.map(v => v === -1 ? null : v),  // plot null for single-school suppressed
+        borderColor: ds.color,
+        backgroundColor: ds.color + '22',
+        borderWidth: 2.5,
+        pointBackgroundColor: ds.data.map((v, i) => v === -1 ? '#aaa' : ds.color),
+        pointStyle: ds.data.map(v => v === -1 ? 'triangle' : 'circle'),
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        fill: datasets.length === 1,
+        spanGaps: false,
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: datasets.length > 1,
+          labels: { font: { family: 'Georgia, serif', size: 12 }, boxWidth: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const dsIndex = ctx.datasetIndex;
+              const yi = ctx.dataIndex;
+              const origVal = datasets[dsIndex].data[yi];
+              const isApprox = datasets[dsIndex].approx && datasets[dsIndex].approx[yi];
+              if (origVal === null || origVal === undefined) return ctx.dataset.label + ': —';
+              if (origVal === -1) return ctx.dataset.label + ': Less than 10';
+              const prefix = isApprox ? '~' : '';
+              return ctx.dataset.label + ': ' + prefix + fmtNum(origVal);
+            }
+          },
+          bodyFont: { family: 'Georgia, serif' },
+          titleFont: { family: 'Georgia, serif' }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { font: { family: 'Georgia, serif', size: 11 } },
+          grid: { color: '#e8e5e0' }
+        },
+        y: {
+          ticks: {
+            font: { family: 'Georgia, serif', size: 11 },
+            callback: v => fmtNum(v)
+          },
+          grid: { color: '#e8e5e0' },
+          beginAtZero: false
+        }
+      }
+    }
+  });
+
+  // Resize canvas height dynamically
+  const canvas = document.getElementById('ew-chart');
+  canvas.style.height = '300px';
+
+  // Build table
+  const tableEl = document.getElementById('ew-table-inner');
+  let th = `<table><thead><tr><th>School Year</th>`;
+  datasets.forEach(ds => { th += `<th>${escHtml(ds.label)}</th>`; });
+  if (datasets.length > 1) th += `<th>Total</th>`;
+  th += `</tr></thead><tbody>`;
+
+  let rows = '';
+  for (let yi = 0; yi < 10; yi++) {
+    const vals = datasets.map(ds => ds.data[yi]);
+    const isApproxYear = yearApprox[yi];
+
+    // Total: sum real values; approx values already have 5 substituted
+    const hasAny = vals.some(v => v !== null && v !== undefined);
+    const total = !hasAny ? null : vals.reduce((s, v) => {
+      if (v === null || v === undefined || v === -1) return s;
+      return s + v;
+    }, 0);
+
+    const yearLabel = isApproxYear
+      ? `${YEAR_LABELS[yi]} <span class="ew-approx-marker" title="Includes estimated values for schools reporting fewer than 10 students">~</span>`
+      : YEAR_LABELS[yi];
+
+    let rowHtml = `<tr><td>${yearLabel}</td>`;
+    datasets.forEach((ds) => {
+      const v = ds.data[yi];
+      const cellApprox = ds.approx && ds.approx[yi];
+      let trendHtml = '';
+      if (v !== null && v !== undefined && v !== -1) {
+        for (let pi = yi - 1; pi >= 0; pi--) {
+          const prev = ds.data[pi];
+          if (prev !== null && prev !== undefined && prev !== -1 && prev > 0) {
+            if (pi === yi - 1) {
+              const pct = ((v - prev) / prev * 100);
+              const arrow = pct > 0 ? '▲' : (pct < 0 ? '▼' : '');
+              const cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : '');
+              trendHtml = ` <span class="ew-trend ${cls}">${arrow}${Math.abs(pct).toFixed(1)}%</span>`;
+            }
+            break;
+          }
+        }
+      }
+      let display;
+      if (v === null || v === undefined) {
+        display = '—';
+      } else if (v === -1) {
+        display = '<em style="color:#888;font-size:0.78rem">Less than 10</em>';
+      } else {
+        const pfx = cellApprox ? '<span class="ew-approx-marker" title="Includes estimated values for schools reporting fewer than 10 students">~</span>' : '';
+        display = pfx + fmtNum(v) + trendHtml;
+      }
+      rowHtml += `<td class="num">${display}</td>`;
+    });
+    if (datasets.length > 1) {
+      const totalDisplay = total === null ? '—'
+        : (isApproxYear ? '<span class="ew-approx-marker" title="Includes estimated values for schools reporting fewer than 10 students">~</span>' : '') + fmtNum(total);
+      rowHtml += `<td class="num">${totalDisplay}</td>`;
+    }
+    rowHtml += `</tr>`;
+    rows += rowHtml;
+  }
+  tableEl.innerHTML = th + rows + '</tbody></table>';
+}
+
+// ==========================================
+// UTILS
+// ==========================================
+function fmtNum(n) {
+  if (n === null || n === undefined) return '—';
+  if (n === -1) return 'Less than 10';
+  if (n < 0) return '—';
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
