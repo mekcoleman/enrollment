@@ -875,7 +875,7 @@ function renderGroup(main) {
     color: COLORS[0],
   }];
   const contextNote = EW.groupCat === '3'
-    ? 'In Illinois, private schools are not required to report enrollment to the state unless they choose to become \u201cRegistered\u201d or \u201cRecognized\u201d by the Illinois State Board of Education. While registration is voluntary, many established private schools participate to ensure their students are eligible for state-funded programs, scholarships, and sports.'
+    ? 'In Illinois, private schools are not required to report enrollment. These numbers underrepresent private school enrollment.'
     : null;
   const locationLabel = EW.county ? `${EW.county} County` : 'Statewide';
   renderChartAndTable(main, datasets, `${catLabel} \u2014 ${locationLabel} Enrollment`, 'K-12 enrollment by school year', contextNote);
