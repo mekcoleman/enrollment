@@ -817,7 +817,7 @@ function getDistrictSeries(sel) {
 
 function getGroupSeries(cat) {
   const db = EW.db;
-  const series = Array(10).fill(0);
+  const series = Array(10).fill(null);
   const approx = Array(10).fill(false);
   const catIdx = cat === 'all' ? -1 : db.cats.indexOf(cat);
   const countyIdx = EW.county ? db.counties.indexOf(EW.county) : -1;
@@ -826,10 +826,10 @@ function getGroupSeries(cat) {
     if (catIdx >= 0 && catI !== catIdx) continue;
     if (countyIdx >= 0 && countyI !== countyIdx) continue;
     if (k12 === -1) {
-      series[yOff] += 5; // midpoint substitution
+      series[yOff] = (series[yOff] || 0) + 5; // midpoint substitution
       approx[yOff] = true;
     } else if (k12 > 0) {
-      series[yOff] += k12;
+      series[yOff] = (series[yOff] || 0) + k12;
     }
   }
   return { data: series, approx };
@@ -878,19 +878,35 @@ function renderGroup(main) {
     ? 'In Illinois, private schools are not required to report enrollment. These numbers underrepresent private school enrollment.'
     : null;
   const locationLabel = EW.county ? `${EW.county} County` : 'Statewide';
-  renderChartAndTable(main, datasets, `${catLabel} \u2014 ${locationLabel} Enrollment`, 'K-12 enrollment by school year', contextNote);
+  renderChartAndTable(main, datasets, `${catLabel} \u2014 ${locationLabel} Enrollment`, 'K-12 enrollment by school year', contextNote, true);
 }
 
 // ==========================================
 // CHART + TABLE
 // ==========================================
-function renderChartAndTable(main, datasets, title, subtitle, contextNote) {
+function renderChartAndTable(main, datasets, title, subtitle, contextNote, skipNullYears) {
   // Compute per-year approx flag (true if ANY dataset has approx for that year)
   const yearApprox = Array(10).fill(false);
   datasets.forEach(ds => {
     if (ds.approx) ds.approx.forEach((a, i) => { if (a) yearApprox[i] = true; });
   });
-  const anyApprox = yearApprox.some(a => a);
+
+  // If skipNullYears, build an index of years to include (those with data in at least one dataset)
+  let activeYears = Array.from({length: 10}, (_, i) => i);
+  if (skipNullYears) {
+    activeYears = activeYears.filter(yi =>
+      datasets.some(ds => ds.data[yi] !== null && ds.data[yi] !== undefined)
+    );
+    // Remap datasets and approx arrays to only active years
+    datasets = datasets.map(ds => ({
+      ...ds,
+      data: activeYears.map(yi => ds.data[yi]),
+      approx: ds.approx ? activeYears.map(yi => ds.approx[yi]) : undefined,
+    }));
+  }
+
+  const activeYearApprox = activeYears.map(yi => yearApprox[yi]);
+  const anyApprox = activeYearApprox.some(a => a);
 
   main.innerHTML = `
     <div class="ew-chart-area">
@@ -909,7 +925,7 @@ function renderChartAndTable(main, datasets, title, subtitle, contextNote) {
 
   // Build chart — for approx years, use the value as-is (5 substituted already)
   // but label the x-axis tick with ~ if that year is approximate
-  const xLabels = YEAR_LABELS.map((lbl, i) => yearApprox[i] ? '~' + lbl : lbl);
+  const xLabels = activeYears.map((yi, i) => activeYearApprox[i] ? '~' + YEAR_LABELS[yi] : YEAR_LABELS[yi]);
 
   const ctx = document.getElementById('ew-chart').getContext('2d');
   EW.chart = new Chart(ctx, {
@@ -968,7 +984,7 @@ function renderChartAndTable(main, datasets, title, subtitle, contextNote) {
             callback: v => fmtNum(v)
           },
           grid: { color: '#e8e5e0' },
-          beginAtZero: true
+          beginAtZero: false
         }
       }
     }
@@ -986,9 +1002,10 @@ function renderChartAndTable(main, datasets, title, subtitle, contextNote) {
   th += `</tr></thead><tbody>`;
 
   let rows = '';
-  for (let yi = 0; yi < 10; yi++) {
-    const vals = datasets.map(ds => ds.data[yi]);
-    const isApproxYear = yearApprox[yi];
+  for (let ai = 0; ai < activeYears.length; ai++) {
+    const yi = activeYears[ai];
+    const vals = datasets.map(ds => ds.data[ai]);
+    const isApproxYear = activeYearApprox[ai];
 
     // Total: sum real values; approx values already have 5 substituted
     const hasAny = vals.some(v => v !== null && v !== undefined);
@@ -1003,14 +1020,14 @@ function renderChartAndTable(main, datasets, title, subtitle, contextNote) {
 
     let rowHtml = `<tr><td>${yearLabel}</td>`;
     datasets.forEach((ds) => {
-      const v = ds.data[yi];
-      const cellApprox = ds.approx && ds.approx[yi];
+      const v = ds.data[ai];
+      const cellApprox = ds.approx && ds.approx[ai];
       let trendHtml = '';
       if (v !== null && v !== undefined && v !== -1) {
-        for (let pi = yi - 1; pi >= 0; pi--) {
+        for (let pi = ai - 1; pi >= 0; pi--) {
           const prev = ds.data[pi];
           if (prev !== null && prev !== undefined && prev !== -1 && prev > 0) {
-            if (pi === yi - 1) {
+            if (pi === ai - 1) {
               const pct = ((v - prev) / prev * 100);
               const arrow = pct > 0 ? '▲' : (pct < 0 ? '▼' : '');
               const cls = pct > 0 ? 'up' : (pct < 0 ? 'down' : '');
